@@ -51,7 +51,7 @@ class wordOfTheDay {
 		$this->cacheDataPath = './api_cache.json';
 		$this->currentTime = time();
 		$this->cacheTime = $this->currentTime;
-		$this->apiMinCallIntervalMs = 1 * 60 * 60 * 1000; // 1 hour
+		$this->apiMinCallIntervalSeconds = 1 * 60 * 60; // 1 hour
 		
 		$this->getWordOfTheDay(); //do the deed
 	}
@@ -77,7 +77,7 @@ class wordOfTheDay {
 		}
 		$cacheDelta = $this->currentTime - $this->cacheTime;
 		
-		if ($cacheDelta >= $this->apiMinCallIntervalMs){
+		if ($cacheDelta >= $this->apiMinCallIntervalSeconds){
 			return FALSE;
 		}else{
 			if(FALSE === $cacheData = file_get_contents($this->cacheDataPath)){
