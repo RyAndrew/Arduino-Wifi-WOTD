@@ -49,8 +49,6 @@ class wordOfTheDay {
 		$this->curlUseragent = 'Arduino-PHP-API';
 		$this->cacheTimePath = './api_cache_timestamp.txt';
 		$this->cacheDataPath = './api_cache.json';
-		$this->currentTime = time();
-		$this->cacheTime = $this->currentTime;
 		$this->apiMinCallIntervalSeconds = 1 * 60 * 60; // 1 hour
 		
 		$this->getWordOfTheDay(); //do the deed
@@ -69,15 +67,14 @@ class wordOfTheDay {
 	function checkApiCache(){
 	
 		if(file_exists($this->cacheTimePath)){
-			if( FALSE === $this->cacheTime = file_get_contents($this->cacheTimePath)){
+			if( FALSE === $cacheTime = file_get_contents($this->cacheTimePath)){
 				die("Failed to read cache refresh timing file! File: {$this->cacheTimePath}");
 			}
 		}else{
 			return FALSE;
 		}
-		$cacheDelta = $this->currentTime - $this->cacheTime;
 		
-		if ($cacheDelta >= $this->apiMinCallIntervalSeconds){
+		if (time() - $cacheTime >= $this->apiMinCallIntervalSeconds){
 			return FALSE;
 		}else{
 			if(FALSE === $cacheData = file_get_contents($this->cacheDataPath)){
