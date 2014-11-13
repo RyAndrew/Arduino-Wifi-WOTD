@@ -1,52 +1,218 @@
 
-#include "U8glib.h"
-U8GLIB_SH1106_128X64 u8g(U8G_I2C_OPT_NO_ACK);	// Display which does not send ACK
+#include "U8glib.h";
 
-//TODO: Use 2X variants for better screen refresh rates?
-//HW SPI 	u8g_dev_sh1106_128x64_2x_hw_spi 	U8GLIB_SH1106_128X64_2X(cs, a0 [, reset]) 	impl. 	impl. 	n.a. 	impl.
-//I2C 	u8g_dev_sh1106_128x64_2x_i2c 	U8GLIB_SH1106_128X64_2X(U8G_I2C_OPT_NONE) 	impl. 	n.a. 	n.a. 	impl. 
+U8GLIB_SH1106_128X64_2X  u8g = U8GLIB_SH1106_128X64_2X(U8G_I2C_OPT_NO_ACK);
 
-// handle scrolling
-uint8_t xPosScroll = 0;
+String wodWord, wodDefinition;
 
+//word of the day - word buffer
+char wodWordChar[40];
+//for scrolling word:
+u8g_uint_t wodWordCharWidth;
+int16_t wodWordCharXPosScroll;
 
-char wodWordChar[20] = "Word\0", wodDefinitionChar[300] = "Definition\0";
+//word of the day - definition buffer
+char wodDefinitionChar[100];
+uint16_t wodDefinitionCharLen;
+
+//for scrolling definition:
+uint16_t wodDefinitionPos = 0;
+
+uint8_t DefinitionLetterCountTypical = 16;
+boolean endOfDefinitionFlag = false;
+
+char scrollTextOne[18];
+char scrollTextTwo[18];
+
+u8g_uint_t scrollTextOneWidth;
+u8g_uint_t scrollTextTwoWidth;
+
+int16_t scrollTextOneXPosScroll;
+int16_t scrollTextTwoXPosScroll;
 
 void setup() {
   
   //For Debug Only:
-  //Serial.begin(115200);
-  //Serial.println("booting");
+  Serial.begin(115200);
+  Serial.println("booting");
   
   Serial1.begin(57600); // AT+UART=115200,8,1,None,NFC
-  
-  delay(6000); // wait 6 seconds to connect to wifi
-  enterCommandMode();
-  sendHttpRequestSockB();
-}
 
-void draw(uint8_t xPos) {
-  // graphic commands to redraw the complete screen should be placed here  
-  u8g.setFont(u8g_font_gdb14); //gentium
-  u8g.setFontPosCenter();
-  
-  u8g.drawStr( 0, 10, wodWordChar );
-  u8g.setFont(u8g_font_gdb11); //gentium
-  u8g.drawStr( xPos, 40, wodDefinitionChar );
-}
-
-void loop() {
-  
-  // decrement scroller
-  xPosScroll -= 10;
-  
-  // picture loop
+  //show boot message on screen:
   u8g.firstPage();  
   do {
-    draw(xPosScroll);
+    drawboot();
   } while( u8g.nextPage() );
   
+  delay(10000); // wait 10 seconds to connect to wifi
+  getWordOfTheDay();
+
 }
+
+
+void loop() {
+  //debug
+  // decrement scroller
+  //char xPosScrollChar[3];
+  //itoa(xPosScroll, xPosScrollChar, 10);
+  //Serial.println(xPosScrollChar);
+
+
+  checkWordScrollPosition();
+  
+  //Serial.println("------");
+  //Serial.print("wodDefinitionPos: ");
+  //Serial.println(wodDefinitionPos);
+
+  //getNextDisplayTextChunk(scrollTextOne, scrollTextOneWidth);
+  
+  //Serial.print("scrollTextOne: ");
+  //Serial.println(scrollTextOne);
+  //Serial.print("scrollTextOneWidth: ");
+  //Serial.println(scrollTextOneWidth);
+  //Serial.print("scrollTextOneXPosScroll: ");
+  //Serial.println(scrollTextOneXPosScroll);
+
+  //getNextDisplayTextChunk(scrollTextTwo, scrollTextTwoWidth);
+  
+  //Serial.print("scrollTextTwo: ");
+  //Serial.println(scrollTextTwo);
+  //Serial.print("scrollTextTwoWidth: ");
+  //Serial.println(scrollTextTwoWidth);
+  //Serial.print("scrollTextTwoXPosScroll: ");
+  //Serial.println(scrollTextTwoXPosScroll);
+
+  
+  u8g.firstPage();  
+  do {
+    draw();
+  } while( u8g.nextPage() );
+  
+  //check if we need to scroll the word
+  if(wodWordCharWidth > 128){
+    wodWordCharXPosScroll -= 3;
+  }
+  //decrement scrollers for definition word chunks
+  scrollTextOneXPosScroll -= 3;
+  scrollTextTwoXPosScroll -= 3;
+  
+  //Serial.print("wodWordCharXPosScroll: ");
+  //Serial.println(wodWordCharXPosScroll);
+  
+  //Delay for debugging
+  //delay(250);
+}
+
+void drawboot(){
+  u8g.setFont(u8g_font_helvR12); //gentium
+  u8g.setFontPosTop();
+  u8g.drawStr( 0, 0, "Booting!" );
+}
+
+void getWordOfTheDay(){
+  
+  //test word
+  //strncpy(wodWordChar, "Comeuppance\0", 13);
+  //test definition
+  //strncpy(wodDefinitionChar, "Deserved reward or just deserts, usually unpleasant.\0", 54);
+  
+  enterCommandMode();
+  sendHttpRequestSockB();
+  
+  //for debug
+  //Serial.print("wodWord String:");
+  //Serial.println(wodWord);
+  //Serial.print("wodDefinition String:");
+  //Serial.println(wodDefinition);
+  
+  wodWord.toCharArray(wodWordChar, wodWord.length() + 1);
+  wodDefinition.toCharArray(wodDefinitionChar, wodDefinition.length() + 1);
+  
+  //for debug
+  //Serial.print("wodWordChar []:");
+  //Serial.println(wodWordChar);
+  //Serial.print("wodDefinitionChar []:");
+  //Serial.println(wodDefinitionChar);
+  
+  u8g.setFont(u8g_font_gdb14);
+  wodWordCharWidth = u8g.getStrWidth(wodWordChar);
+  
+  wodDefinitionCharLen = strlen(wodDefinitionChar);
+  
+  //Serial.print("wodDefinitionChar: ");
+  //Serial.println(wodDefinitionChar);
+  //Serial.print("wodDefinitionCharLen: ");
+  //Serial.println(wodDefinitionCharLen);
+  
+  //reset all scroll related vars
+  scrollTextOneWidth = 0; //initial value, set a width equal to the screen width. This will trigger grabbing the first chunk of text
+  scrollTextTwoWidth = 128; //initial value is specific to allow scrollTextOneXPosScroll to be calculated properly 
+
+  scrollTextOneXPosScroll = 0;
+  scrollTextTwoXPosScroll = 0;
+}
+
+void draw() {
+  
+  // graphic commands to redraw the complete screen should be placed here  
+  u8g.setFont(u8g_font_gdb14); //gentium
+  u8g.setFontPosTop();
+  u8g.drawStr( wodWordCharXPosScroll, 0, wodWordChar );
+  
+  u8g.setFont(u8g_font_gdb11);
+  u8g.drawStr( scrollTextOneXPosScroll, 40, scrollTextOne );
+  u8g.drawStr( scrollTextTwoXPosScroll, 40, scrollTextTwo );
+}
+
+void checkWordScrollPosition(){
+  if(scrollTextOneXPosScroll <= scrollTextOneWidth * -1){
+    getNextDisplayTextChunk(scrollTextOne, &scrollTextOneWidth);
+    scrollTextOneXPosScroll = scrollTextTwoXPosScroll + scrollTextTwoWidth;
+  }
+  if(scrollTextTwoXPosScroll <= scrollTextTwoWidth * -1){
+    getNextDisplayTextChunk(scrollTextTwo, &scrollTextTwoWidth);
+    scrollTextTwoXPosScroll = scrollTextOneXPosScroll + scrollTextOneWidth;
+  }
+}
+
+void getNextDisplayTextChunk(char* newCharChunk, u8g_uint_t* newCharChunkWidth){
+  uint16_t charsToRead = DefinitionLetterCountTypical;
+  
+  //Serial.println("getNextDisplayTextChunk!");
+  //Serial.print("wodDefinitionPos: ");
+  //Serial.println(wodDefinitionPos);
+  
+  //are we at the end of the definition?
+  if(wodDefinitionPos + DefinitionLetterCountTypical > wodDefinitionCharLen ){
+    charsToRead = wodDefinitionCharLen - wodDefinitionPos;
+  }
+  
+  //Serial.print("charsToRead: ");
+  //Serial.println(charsToRead);
+  //Serial.print("wodDefinitionPos: ");
+  //Serial.println(wodDefinitionPos);
+  
+  strncpy(newCharChunk, wodDefinitionChar + wodDefinitionPos, charsToRead);
+  newCharChunk[charsToRead] = '\0';
+
+  if(wodDefinitionPos + DefinitionLetterCountTypical > wodDefinitionCharLen ){
+    wodDefinitionPos = 0;
+    endOfDefinitionFlag = true;
+  }else{
+    wodDefinitionPos += charsToRead;
+  }
+
+    if(endOfDefinitionFlag){
+      *newCharChunkWidth = 128;
+      endOfDefinitionFlag = false;
+    }else{
+      u8g.setFont(u8g_font_gdb11);
+      *newCharChunkWidth = u8g.getStrWidth(newCharChunk);
+    }
+}
+
+///////////////////////////////////////
+// WIFI STUFF:
 
 boolean sendWifiSerialCmd(String command){
   Serial1.print(command + "\r");
@@ -105,14 +271,14 @@ void sendHttpRequestSockB()
   String response = readAllSerialOutputForMs(4000);
 
 /*  
-// TODO strip HTTP headers and such correctly
+// TODO strip HTTP headers and such more cleanly
   int strSearch = response.indexOf(','); //Response start
     //Serial.println("HTTP Response Search:");
     //Serial.println(strSearch);
   if(strSearch){
     response = response.substring(strSearch);
   }else{
-    Serial.println("HTTP Response Not Found!");
+    //Serial.println("HTTP Response Not Found!");
   }
   
   strSearch = response.indexOf("\r\n\r\n"); //HTTP Body Start
@@ -139,8 +305,6 @@ void sendHttpRequestSockB()
   //Serial.println(response);
   //Serial.println("------");
   
-  
-  
   int strSearch = response.indexOf('|'); //HTTP Response Token Start
   //Serial.println("HTTP Response End Search:");
   //Serial.println(strSearch);
@@ -149,8 +313,6 @@ void sendHttpRequestSockB()
   }else{
     //Serial.println("HTTP Response End Not Found!");
   }
-  
-  String wodWord, wodDefinition;
 
   strSearch = response.indexOf('|'); //HTTP Response Token Start
   //Serial.println("HTTP Response End Search:");
@@ -179,8 +341,7 @@ void sendHttpRequestSockB()
   //Serial.println(wodDefinition);
   //Serial.println("------");
   
-  wodWord.toCharArray(wodWordChar, wodWord.length() + 1);
-  wodDefinition.toCharArray(wodDefinitionChar, wodDefinition.length() + 1);
+
   
   //Serial.println("Disconnecting Socket B, sending AT+TCPDISB=off");
   sendWifiSerialCmdWaitForOk("AT+TCPDISB=off");
@@ -236,6 +397,7 @@ char* readAllSerialOutputForMs(unsigned long wait)
   result[index] = '\0';
   return result;
 }
+
 boolean enterCommandMode()
 {
   //Serial.println("Enter Command Mode");
